@@ -99,7 +99,15 @@ th,td{padding:10px 16px;text-align:left;white-space:nowrap}
 th{font-size:.72rem;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);font-weight:600;background:var(--sunken);border-bottom:1px solid var(--line)}
 tbody tr+tr td{border-top:1px solid var(--line)}
 tbody tr:hover td{background:var(--sunken)}
-td.idx{color:var(--muted);width:44px;font-size:.85rem}
+td.idx{color:var(--muted);width:72px;font-size:.85rem;white-space:nowrap}
+.grip{display:inline-grid;place-items:center;width:24px;height:26px;margin:-4px 6px -4px -6px;vertical-align:middle;border:0;border-radius:6px;background:transparent;color:var(--muted);cursor:grab;touch-action:none;opacity:.55;padding:0}
+.grip:hover,.grip:focus-visible{opacity:1;color:var(--accent);background:var(--accent-soft)}
+tbody tr{transition:transform .15s ease}
+tbody tr.dragging{transition:none;position:relative;z-index:3}
+tbody tr.dragging td{background:var(--surface);box-shadow:0 10px 24px -12px rgba(20,27,43,.45)}
+tbody tr.dragging .grip{cursor:grabbing;opacity:1;color:var(--accent)}
+body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
+@media (prefers-reduced-motion:reduce){tbody tr{transition:none}}
 td.nick{font:600 .95rem var(--font-display)}
 td.user{font:500 .95rem var(--font-mono)}
 td.num,th.num{text-align:right}
@@ -162,6 +170,7 @@ textarea{width:100%;min-height:220px;resize:vertical;font:.9rem/1.65 var(--font-
         <button class="btn" id="copyTable" disabled>Copy ตาราง (Excel)</button>
         <button class="btn ghost" id="copyNums" disabled>เฉพาะตัวเลข</button>
         <button class="btn ghost" id="copyText" disabled>แบบข้อความ</button>
+        <button class="btn ghost" id="resetOrder" hidden title="กลับไปเรียงตามรายชื่อเดิม">รีเซ็ตลำดับ</button>
         <label for="missVal" class="hint">ไม่พบ =</label>
         <select id="missVal"><option value="ไม่พบ">ไม่พบ</option><option value="0">0</option><option value="">(ว่าง)</option><option value="-">-</option></select>
       </div>
@@ -179,7 +188,7 @@ textarea{width:100%;min-height:220px;resize:vertical;font:.9rem/1.65 var(--font-
     <summary id="edtitle">รายชื่อ Username</summary>
     <div class="ed">
       <textarea id="names" spellcheck="false" aria-label="รายชื่อ Username"></textarea>
-      <p class="hint">หนึ่งชื่อต่อบรรทัด ใส่ชื่อเล่นไว้หน้า Username ได้ เช่น "Bryan itzmeyanyan" · ไม่สนตัวพิมพ์เล็ก/ใหญ่ ที่แก้ตรงนี้จะจำไว้ในเบราว์เซอร์นี้แยกตามเซิร์ฟเวอร์</p>
+      <p class="hint">ลาก ⠿ หน้าเลขลำดับในตารางเพื่อสลับลำดับได้ · หนึ่งชื่อต่อบรรทัด ใส่ชื่อเล่นไว้หน้า Username ได้ เช่น "Bryan itzmeyanyan" · ไม่สนตัวพิมพ์เล็ก/ใหญ่ ที่แก้ตรงนี้จะจำไว้ในเบราว์เซอร์นี้แยกตามเซิร์ฟเวอร์</p>
       <div><button class="btn ghost" id="resetNames">คืนค่ารายชื่อเริ่มต้น</button></div>
     </div>
   </details>
@@ -313,6 +322,9 @@ function compute(){
     const h=map.get(n.toLowerCase());
     return h?{username:n,nick,state:"ok",wallet:h.wallet,country:h.country,dup:h.dup}:{username:n,nick,state:"miss"};
   });
+  const ord=getOrder(current);
+  if(ord){ const pos=new Map(ord.map((u,i)=>[u,i])); const P=r=>pos.has(r.username.toLowerCase())?pos.get(r.username.toLowerCase()):1e9;
+    results=results.map((r,i)=>[r,i]).sort((a,b)=>(P(a[0])-P(b[0]))||(a[1]-b[1])).map(x=>x[0]); }
   render();
 }
 
@@ -333,10 +345,55 @@ function render(){
   $("tbody").innerHTML=results.length?results.map((r,i)=>{
     const v=r.state==="ok"?fmt(r.wallet):r.state==="miss"?(missVal||dash):"…";
     const tag=r.state==="ok"?`<span class="tag ok">พบ${r.dup>1?` · ซ้ำ ${r.dup}`:""}</span>`:r.state==="miss"?`<span class="tag miss">ไม่พบ</span>`:`<span class="tag wait">รอไฟล์</span>`;
-    return `<tr class="${r.state}"><td class="idx">${i+1}</td><td class="nick">${r.nick?esc(r.nick):'<span class="hint">—</span>'}</td><td class="user">${esc(r.username)}</td><td class="num">${v}</td><td>${r.country?`<span class="cc">${esc(r.country)}</span>`:""}</td><td>${tag}</td></tr>`;
+    return `<tr class="${r.state}"><td class="idx"><button class="grip" type="button" data-i="${i}" title="ลากเพื่อย้าย (หรือกด ↑ ↓)" aria-label="ย้าย ${esc(r.username)} · กดลูกศรขึ้นลงเพื่อย้าย">${GRIP}</button><span class="n">${i+1}</span></td><td class="nick">${r.nick?esc(r.nick):'<span class="hint">—</span>'}</td><td class="user">${esc(r.username)}</td><td class="num">${v}</td><td>${r.country?`<span class="cc">${esc(r.country)}</span>`:""}</td><td>${tag}</td></tr>`;
   }).join(""):`<tr><td colspan="6" class="hint" style="padding:20px 16px">ยังไม่มีรายชื่อ เปิด "รายชื่อ Username" ด้านล่างเพื่อเพิ่ม</td></tr>`;
   ["copyTable","copyNums","copyText"].forEach(id=>$(id).disabled=!loaded||!results.length);
+  $("resetOrder").hidden=!getOrder(current);
 }
+
+// ---------- Reorder rows (drag the grip, or focus it and press ↑ ↓) ----------
+const GRIP='<svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor" aria-hidden="true"><circle cx="3" cy="3" r="1.5"/><circle cx="9" cy="3" r="1.5"/><circle cx="3" cy="8" r="1.5"/><circle cx="9" cy="8" r="1.5"/><circle cx="3" cy="13" r="1.5"/><circle cx="9" cy="13" r="1.5"/></svg>';
+function getOrder(s){ try{ const a=JSON.parse(store.get("wpc.order."+s)||"null"); return Array.isArray(a)&&a.length?a:null; }catch(e){ return null; } }
+function moveRow(from,to){
+  if(from===to||to<0||to>=results.length) return;
+  const arr=results.map(r=>r.username.toLowerCase()); const [x]=arr.splice(from,1); arr.splice(to,0,x);
+  store.set("wpc.order."+current,JSON.stringify(arr)); compute();
+}
+let drag=null;
+$("tbody").addEventListener("pointerdown",e=>{
+  const g=e.target.closest(".grip"); if(!g||e.button>0) return;
+  e.preventDefault();
+  const rows=[...$("tbody").rows], tr=g.closest("tr"), from=rows.indexOf(tr);
+  drag={rows,tr,from,to:from,y0:e.pageY,h:tr.getBoundingClientRect().height,
+    mids:rows.map(r=>{const b=r.getBoundingClientRect();return b.top+scrollY+b.height/2})};
+  tr.classList.add("dragging"); document.body.classList.add("is-dragging");
+  try{ g.setPointerCapture(e.pointerId); }catch(_){}
+});
+addEventListener("pointermove",e=>{
+  if(!drag) return;
+  const {rows,tr,from,h,mids}=drag, dy=e.pageY-drag.y0, y=mids[from]+dy;
+  let to=0; mids.forEach((m,i)=>{ if(i!==from && m<y) to++; }); drag.to=to;
+  tr.style.transform=`translateY(${dy}px)`;
+  rows.forEach((r,i)=>{ if(r===tr) return;
+    const shift = (from<to && i>from && i<=to) ? -h : (from>to && i>=to && i<from) ? h : 0;
+    r.style.transform=shift?`translateY(${shift}px)`:"";
+    const n=r.querySelector(".n"); if(n) n.textContent = i+1 + (shift<0?-1:shift>0?1:0);
+  });
+  const n=tr.querySelector(".n"); if(n) n.textContent=to+1;
+});
+function endDrag(){
+  if(!drag) return; const {from,to,rows}=drag; drag=null;
+  rows.forEach(r=>{ r.style.transform=""; r.classList.remove("dragging"); }); document.body.classList.remove("is-dragging");
+  if(from!==to) moveRow(from,to); else render();
+}
+addEventListener("pointerup",endDrag); addEventListener("pointercancel",endDrag);
+$("tbody").addEventListener("keydown",e=>{
+  const g=e.target.closest(".grip"); if(!g) return;
+  const i=+g.dataset.i, to=e.key==="ArrowUp"?i-1:e.key==="ArrowDown"?i+1:null; if(to===null) return;
+  e.preventDefault(); if(to<0||to>=results.length) return;
+  moveRow(i,to); $("tbody").querySelector(`.grip[data-i="${to}"]`)?.focus();
+});
+$("resetOrder").onclick=()=>{ try{ localStorage.removeItem("wpc.order."+current); }catch(e){} compute(); toast("กลับไปเรียงตามรายชื่อเดิมแล้ว"); };
 
 const val=r=>r.state==="ok"?String(r.wallet):$("missVal").value;
 function copy(text,msg){
@@ -352,7 +409,7 @@ $("missVal").onchange=render;
 let tt; function toast(m){const e=$("toast");e.textContent=m;e.classList.add("show");clearTimeout(tt);tt=setTimeout(()=>e.classList.remove("show"),1900)}
 
 namesEl.addEventListener("input",()=>{store.set("wpc.names."+current,namesEl.value);renderServers();compute()});
-$("resetNames").onclick=()=>{namesEl.value=SERVERS[current].names;store.set("wpc.names."+current,namesEl.value);renderServers();compute();toast("คืนค่ารายชื่อแล้ว")};
+$("resetNames").onclick=()=>{try{localStorage.removeItem("wpc.order."+current)}catch(e){}namesEl.value=SERVERS[current].names;store.set("wpc.names."+current,namesEl.value);renderServers();compute();toast("คืนค่ารายชื่อแล้ว")};
 
 // ---------- File reading ----------
 const norm=h=>String(h||"").toLowerCase().replace(/[^a-z]/g,"");
