@@ -222,22 +222,22 @@ Sasa fattykrappy
 PM: Bomb Finalmoon
 แนน Maminion
 รัน Usango`},
-  "CBM-TH":  {plat:"Mobile", region:"TH", match:/(cbm|^m)[\s_-]*th|mobile[\s_-]*th/i, names:`phongpitchz
-nawapk1806
-Maminion
-trinitysoults
-usango
-Finalmoon
-Hazumaki1992
-shinigami888
-Meezaza2000`},
+  "CBM-TH":  {plat:"Mobile", region:"TH", match:/(cbm|^m)[\s_-]*th|mobile[\s_-]*th/i, names:`Pond phongpitchz
+Palm nawapk1806
+แนน Maminion
+ป้อง trinitysoults
+รัน usango
+PM: Bomb Finalmoon
+Mintt Hazumaki1992
+Tong shinigami888
+เฟด Meezaza2000`},
 };
 const ORDER = ["CBPC-SEA","CBPC-TH","CBM-SEA","CBM-TH"];
 const store = {
   get(k){try{return localStorage.getItem(k)}catch(e){return null}},
   set(k,v){try{localStorage.setItem(k,v)}catch(e){}}
 };
-const LIST_VER = "10";
+const LIST_VER = "11";
 try{ if(localStorage.getItem("wpc.listver")!==LIST_VER){ ORDER.forEach(s=>localStorage.removeItem("wpc.names."+s)); localStorage.setItem("wpc.listver",LIST_VER); } }catch(e){}
 
 let current = store.get("wpc.server") || "CBPC-SEA";
