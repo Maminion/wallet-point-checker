@@ -198,15 +198,15 @@ Rizal seatestcabal
 Sasa fattykrappy
 Adams cruzer23
 ป้อง trinitysoults`},
-  "CBPC-TH": {plat:"PC", region:"TH", match:/pc[\s_-]*th/i, names:`phongpitchz
-nawapk1806
-Maminion
-trinitysoults
-magcstar
-dalifz
-shinigami888
-Chocokaew
-thanawattha02`},
+  "CBPC-TH": {plat:"PC", region:"TH", match:/pc[\s_-]*th/i, names:`Pond phongpitchz
+Palm nawapk1806
+แนน Maminion
+ป้อง trinitysoults
+Mag magcstar
+dalif dalifz
+Tong shinigami888
+ลูกแก้ว Chocokaew
+โต thanawattha02`},
   "CBM-SEA": {plat:"Mobile", region:"SEA", match:/(cbm|^m)[\s_-]*sea|mobile[\s_-]*sea/i, names:`Bryan itzmeyanyan
 Jay highjacker15
 Eyah eyahlester
@@ -237,7 +237,7 @@ const store = {
   get(k){try{return localStorage.getItem(k)}catch(e){return null}},
   set(k,v){try{localStorage.setItem(k,v)}catch(e){}}
 };
-const LIST_VER = "11";
+const LIST_VER = "12";
 try{ if(localStorage.getItem("wpc.listver")!==LIST_VER){ ORDER.forEach(s=>localStorage.removeItem("wpc.names."+s)); localStorage.setItem("wpc.listver",LIST_VER); } }catch(e){}
 
 let current = store.get("wpc.server") || "CBPC-SEA";
