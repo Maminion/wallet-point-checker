@@ -1,0 +1,413 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Wallet Point Checker</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kanit:wght@500;600;700;800&family=IBM+Plex+Sans+Thai:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{margin:0}
+img{max-width:100%}
+[hidden]{display:none!important}
+/* Layout: centered hero title → server selector → drop zone → stat row → result table; username editor folds away at the bottom */
+:root{
+  --bg:#eef1f7; --surface:#ffffff; --sunken:#f5f7fb; --line:#dde3ee; --fg:#141b2b; --muted:#5f6a80;
+  --accent:#3651d4; --accent-ink:#ffffff; --accent-soft:#e6eafb;
+  --gold:#b47a00; --gold-soft:#fff3d6; --gold-glow:#f5b82e;
+  --ok:#14804a; --ok-soft:#dff3e8; --miss:#c0431b; --miss-soft:#fde8e0;
+  --font-display:"Kanit","IBM Plex Sans Thai",system-ui,sans-serif;
+  --font-body:"IBM Plex Sans Thai",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --font-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  --radius:14px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0e1320; --surface:#171e2e; --sunken:#121827; --line:#283248; --fg:#e8ecf5; --muted:#97a2b8;
+  --accent:#7d93ff; --accent-ink:#0e1320; --accent-soft:#1f2948;
+  --gold:#f5c04a; --gold-soft:#2e2510; --gold-glow:#f5b82e;
+  --ok:#5dd394; --ok-soft:#143023; --miss:#f39373; --miss-soft:#3a1d14; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0e1320; --surface:#171e2e; --sunken:#121827; --line:#283248; --fg:#e8ecf5; --muted:#97a2b8;
+  --accent:#7d93ff; --accent-ink:#0e1320; --accent-soft:#1f2948;
+  --gold:#f5c04a; --gold-soft:#2e2510; --gold-glow:#f5b82e;
+  --ok:#5dd394; --ok-soft:#143023; --miss:#f39373; --miss-soft:#3a1d14; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size:15px;line-height:1.55;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 56px}
+.wrap{max-width:920px;margin:0 auto;display:flex;flex-direction:column;gap:22px}
+
+/* Hero */
+.hero{text-align:center;padding-block:44px 6px;display:flex;flex-direction:column;align-items:center;gap:10px}
+.coin{width:84px;height:84px;display:block;filter:drop-shadow(0 8px 18px rgba(201,138,6,.45))}
+.hero h1{margin:0;font-family:var(--font-display);font-weight:800;font-size:clamp(2.3rem,6.5vw,3.6rem);line-height:1.05;letter-spacing:-.015em;text-wrap:balance}
+.hero h1 span{color:var(--accent)}
+.hero p{margin:0;color:var(--muted);max-width:52ch;text-wrap:balance}
+
+/* Server selector */
+.servers{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+@media (max-width:640px){.servers{grid-template-columns:repeat(2,1fr)}}
+.srv{position:relative;text-align:left;cursor:pointer;border:1.5px solid var(--line);background:var(--surface);color:var(--fg);
+  border-radius:var(--radius);padding:12px 14px;display:flex;flex-direction:column;gap:2px;transition:border-color .15s,transform .15s,box-shadow .15s;font:inherit}
+.srv:hover{border-color:var(--accent);transform:translateY(-1px)}
+.srv[aria-selected="true"]{border-color:var(--accent);background:var(--accent-soft);box-shadow:0 6px 18px -10px var(--accent)}
+.srv .plat{font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.srv .code{font:700 1.2rem var(--font-display);letter-spacing:.01em}
+.srv[aria-selected="true"] .code{color:var(--accent)}
+.srv .meta{font-size:.8rem;color:var(--muted);display:flex;align-items:center;gap:6px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--line);flex:none}
+.dot.on{background:var(--ok)}
+
+/* Drop zone */
+.drop{display:flex;align-items:center;justify-content:center;gap:16px;flex-wrap:wrap;text-align:left;
+  border:2px dashed var(--line);border-radius:var(--radius);padding:22px 20px;background:var(--surface);cursor:pointer;transition:border-color .15s,background .15s}
+.drop:hover,.drop.over{border-color:var(--accent);background:var(--accent-soft)}
+.drop .ic{width:46px;height:46px;border-radius:12px;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;flex:none}
+.drop.over .ic{background:var(--accent);color:var(--accent-ink)}
+.drop strong{display:block;font:600 1.05rem var(--font-display)}
+.drop span{color:var(--muted);font-size:.88rem}
+.drop .file{font:.85rem var(--font-mono);color:var(--ok);word-break:break-all}
+.drop .file.err{color:var(--miss)}
+.drop .file.none{color:var(--muted)}
+
+/* Stats */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+@media (max-width:640px){.stats{grid-template-columns:repeat(2,1fr)}}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:12px 16px}
+.stat .k{font-size:.75rem;color:var(--muted);font-weight:600;letter-spacing:.04em}
+.stat .v{font:700 1.7rem/1.2 var(--font-display);font-variant-numeric:tabular-nums}
+.stat.ok .v{color:var(--ok)} .stat.miss .v{color:var(--miss)}
+.stat.total{background:var(--gold-soft);border-color:transparent}
+.stat.total .v{color:var(--gold)}
+
+/* Results */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+.bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--line)}
+.bar h2{margin:0;font:600 1.1rem var(--font-display)}
+.bar h2 small{font:500 .8rem var(--font-body);color:var(--muted);margin-left:6px}
+.tools{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.btn{font:600 .85rem var(--font-body);padding:7px 13px;border-radius:9px;border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink);cursor:pointer;display:inline-flex;gap:6px;align-items:center}
+.btn.ghost{background:transparent;color:var(--accent);border-color:var(--line)}
+.btn.ghost:hover:not(:disabled){border-color:var(--accent)}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+select{font:.85rem var(--font-body);padding:6px 8px;border-radius:9px;border:1px solid var(--line);background:var(--surface);color:var(--fg)}
+.tablebox{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+th,td{padding:10px 16px;text-align:left;white-space:nowrap}
+th{font-size:.72rem;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);font-weight:600;background:var(--sunken);border-bottom:1px solid var(--line)}
+tbody tr+tr td{border-top:1px solid var(--line)}
+tbody tr:hover td{background:var(--sunken)}
+td.idx{color:var(--muted);width:44px;font-size:.85rem}
+td.user{font:500 .95rem var(--font-mono)}
+td.num,th.num{text-align:right}
+td.num{font:700 1.02rem var(--font-mono);color:var(--gold)}
+tr.miss td.num{color:var(--miss);font-weight:500;font-size:.9rem;font-family:var(--font-body)}
+tr.wait td.num{color:var(--muted);font-weight:400}
+tr.miss td.user{color:var(--muted)}
+.cc{font:600 .75rem var(--font-mono);padding:2px 7px;border-radius:6px;background:var(--sunken);border:1px solid var(--line);color:var(--muted)}
+.tag{font-size:.78rem;padding:2px 10px;border-radius:999px;display:inline-flex;align-items:center;gap:6px}
+.tag::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.tag.ok{background:var(--ok-soft);color:var(--ok)}
+.tag.miss{background:var(--miss-soft);color:var(--miss)}
+.tag.wait{background:var(--sunken);color:var(--muted)}
+pre.out{margin:0;padding:12px 16px;border-top:1px solid var(--line);background:var(--sunken);font:.82rem/1.5 var(--font-mono);max-height:180px;overflow:auto;white-space:pre}
+
+/* Editor */
+details.editor{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius)}
+details.editor summary{cursor:pointer;padding:14px 16px;font:600 1rem var(--font-display);list-style:none;display:flex;justify-content:space-between;align-items:center;gap:10px}
+details.editor summary::-webkit-details-marker{display:none}
+details.editor summary::after{content:"แก้ไข ▾";font:500 .85rem var(--font-body);color:var(--accent)}
+details.editor[open] summary::after{content:"ปิด ▴"}
+.ed{padding:0 16px 16px;display:flex;flex-direction:column;gap:10px}
+textarea{width:100%;min-height:220px;resize:vertical;font:.9rem/1.65 var(--font-mono);padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--sunken);color:var(--fg)}
+.hint{font-size:.82rem;color:var(--muted);margin:0}
+
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.toast{position:fixed;left:50%;bottom:calc(22px + env(safe-area-inset-bottom,0px));transform:translate(-50%,8px);background:var(--fg);color:var(--bg);padding:9px 18px;border-radius:10px;font-size:.9rem;opacity:0;transition:opacity .2s,transform .2s;pointer-events:none;max-width:calc(100% - 32px)}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="hero">
+    <img class="coin" alt="" src="data:image/webp;base64,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">
+    <h1>Wallet Point <span>Checker</span></h1>
+    <p>เลือกเซิร์ฟเวอร์ แล้ววางไฟล์ CSV / Excel ระบบจะดึง Wallet Point คงเหลือของ Username ที่ติดตามไว้ให้ทันที</p>
+  </header>
+
+  <nav class="servers" role="tablist" id="servers" aria-label="เซิร์ฟเวอร์"></nav>
+
+  <label class="drop" id="drop" for="file">
+    <div class="ic" aria-hidden="true">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3"/><path d="m7 8 5-5 5 5"/><path d="M5 15v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"/></svg>
+    </div>
+    <div>
+      <strong>วางไฟล์ตรงนี้ หรือคลิกเพื่อเลือก</strong>
+      <span>.csv / .xlsx · วางหลายไฟล์พร้อมกันได้ แยกเซิร์ฟจากชื่อไฟล์ (PCSEA, PCTH, MSEA, MTH) · ไฟล์ที่วางจะแชร์ให้ทุกคนเห็นได้ 7 วัน</span>
+      <div class="file none" id="fileinfo"></div>
+    </div>
+    <input type="file" id="file" accept=".csv,.xlsx,.xls" multiple hidden>
+  </label>
+
+  <section class="stats" id="stats" aria-live="polite"></section>
+
+  <section class="card">
+    <div class="bar">
+      <h2 id="restitle">ผลลัพธ์</h2>
+      <div class="tools">
+        <button class="btn" id="copyTable" disabled>Copy ตาราง (Excel)</button>
+        <button class="btn ghost" id="copyNums" disabled>เฉพาะตัวเลข</button>
+        <button class="btn ghost" id="copyText" disabled>แบบข้อความ</button>
+        <label for="missVal" class="hint">ไม่พบ =</label>
+        <select id="missVal"><option value="ไม่พบ">ไม่พบ</option><option value="0">0</option><option value="">(ว่าง)</option><option value="-">-</option></select>
+      </div>
+    </div>
+    <div class="tablebox">
+      <table>
+        <thead><tr><th>#</th><th>Username</th><th class="num">Wallet Point</th><th>Country</th><th>สถานะ</th></tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+    <pre class="out" id="out" hidden></pre>
+  </section>
+
+  <details class="editor" id="editor">
+    <summary id="edtitle">รายชื่อ Username</summary>
+    <div class="ed">
+      <textarea id="names" spellcheck="false" aria-label="รายชื่อ Username"></textarea>
+      <p class="hint">หนึ่งชื่อต่อบรรทัด ไม่สนตัวพิมพ์เล็ก/ใหญ่ ที่แก้ตรงนี้จะจำไว้ในเบราว์เซอร์นี้แยกตามเซิร์ฟเวอร์</p>
+      <div><button class="btn ghost" id="resetNames">คืนค่ารายชื่อเริ่มต้น</button></div>
+    </div>
+  </details>
+</div>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+const SERVERS = {
+  "CBPC-SEA": {plat:"PC", region:"SEA", match:/pc[\s_-]*sea/i, names:`itzmeyanyan
+eyahlester
+advance12
+oninski21
+Socc3r4
+ichaichs
+seatestcabal
+fattykrappy
+cruzer23
+trinitysoults`},
+  "CBPC-TH": {plat:"PC", region:"TH", match:/pc[\s_-]*th/i, names:`phongpitchz
+nawapk1806
+Maminion
+trinitysoults
+magcstar
+dalifz
+shinigami888
+Chocokaew
+thanawattha02`},
+  "CBM-SEA": {plat:"Mobile", region:"SEA", match:/(cbm|^m)[\s_-]*sea|mobile[\s_-]*sea/i, names:`itzmeyanyan
+highjacker15
+eyahlester
+apolloxcreep
+oninski21
+yukikaze105
+Sirapobphr
+cruzer23
+ichaichs
+aprzl21
+fattykrappy
+godoflufia
+Finalmoon
+Maminion
+Usango`},
+  "CBM-TH":  {plat:"Mobile", region:"TH", match:/(cbm|^m)[\s_-]*th|mobile[\s_-]*th/i, names:`phongpitchz
+nawapk1806
+Maminion
+trinitysoults
+usango
+Finalmoon
+Hazumaki1992
+shinigami888
+Meezaza2000`},
+};
+const ORDER = ["CBPC-SEA","CBPC-TH","CBM-SEA","CBM-TH"];
+const store = {
+  get(k){try{return localStorage.getItem(k)}catch(e){return null}},
+  set(k,v){try{localStorage.setItem(k,v)}catch(e){}}
+};
+const LIST_VER = "7";
+try{ if(localStorage.getItem("wpc.listver")!==LIST_VER){ ORDER.forEach(s=>localStorage.removeItem("wpc.names."+s)); localStorage.setItem("wpc.listver",LIST_VER); } }catch(e){}
+
+let current = store.get("wpc.server") || "CBPC-SEA";
+if(!SERVERS[current]) current = "CBPC-SEA";
+const fileRows = {}, fileNames = {}, fileAt = {};
+
+// ---------- Shared data (Supabase) ----------
+const SUPABASE_URL = "https://sbsftwzosrfnhdtitemr.supabase.co";
+const SUPABASE_KEY = "sb_publishable_hOEUywF8TlWTcPLW5OBzbQ_nLc1u8h-";
+const KEEP_DAYS = 7;
+const cloudOn = () => /^https:\/\/.+supabase\.co$/.test(SUPABASE_URL) && SUPABASE_KEY.length > 20;
+const sbHeaders = () => ({apikey:SUPABASE_KEY, "Content-Type":"application/json"});
+const thDate = d => new Date(d).toLocaleString("th-TH",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"});
+function daysLeft(at){ const ms = new Date(at).getTime() + KEEP_DAYS*864e5 - Date.now(); return Math.max(0, Math.ceil(ms/864e5)); }
+function applySnapshot(row){
+  const map = new Map();
+  for(const [k,v] of Object.entries(row.data||{})) map.set(k,{wallet:v[0],country:v[1]||"",dup:1});
+  fileRows[row.server] = map; fileAt[row.server] = row.uploaded_at;
+  fileNames[row.server] = `${row.file_name} · อัปโหลด ${thDate(row.uploaded_at)} · เหลือ ${daysLeft(row.uploaded_at)} วัน`;
+}
+async function loadCloud(){
+  if(!cloudOn()) return;
+  try{
+    const since = new Date(Date.now()-KEEP_DAYS*864e5).toISOString();
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/wallet_snapshots?select=server,file_name,uploaded_at,data&uploaded_at=gte.${encodeURIComponent(since)}&order=uploaded_at.desc&limit=40`,{headers:sbHeaders()});
+    if(!r.ok) throw new Error(r.status);
+    const seen = new Set();
+    for(const row of await r.json()){ if(SERVERS[row.server] && !seen.has(row.server)){ seen.add(row.server); applySnapshot(row); } }
+    renderServers(); compute();
+  }catch(e){ toast("โหลดข้อมูลกลางไม่สำเร็จ ใช้แบบวางไฟล์เองได้ตามปกติ"); }
+}
+async function pushCloud(server, fileName, map, count){
+  if(!cloudOn()) return false;
+  const data = {};
+  for(const n of parseNames(getNames(server))){ const h = map.get(n.toLowerCase()); if(h) data[n.toLowerCase()] = [h.wallet, h.country]; }
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/wallet_snapshots`,{method:"POST",headers:{...sbHeaders(),Prefer:"return=representation"},
+    body:JSON.stringify({server, file_name:fileName, row_count:count, data})});
+  if(!r.ok) throw new Error("อัปโหลดขึ้นระบบไม่สำเร็จ ("+r.status+")");
+  const [row] = await r.json(); applySnapshot(row); return true;
+}
+let results = [];
+
+const $ = id => document.getElementById(id);
+const namesEl = $("names");
+const getNames = s => { const v = store.get("wpc.names."+s); return v!==null ? v : SERVERS[s].names; };
+const parseNames = t => t.split(/[\r\n,]+/).map(s=>s.trim()).filter(Boolean);
+const fmt = n => Number(n).toLocaleString("en-US");
+const esc = s => String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+function renderServers(){
+  $("servers").innerHTML = ORDER.map(s=>{
+    const S=SERVERS[s], n=parseNames(getNames(s)).length, has=!!fileRows[s];
+    return `<button class="srv" role="tab" id="srv-${s}" aria-selected="${s===current}" data-s="${s}">
+      <span class="plat">${S.plat} · ${S.region}</span>
+      <span class="code">${s}</span>
+      <span class="meta"><span class="dot ${has?"on":""}"></span>${n} ชื่อ · ${has?(fileAt[s]?"เหลือ "+daysLeft(fileAt[s])+" วัน":"มีไฟล์แล้ว"):"ยังไม่มีข้อมูล"}</span>
+    </button>`;
+  }).join("");
+  $("servers").querySelectorAll(".srv").forEach(b=>b.onclick=()=>switchServer(b.dataset.s));
+}
+function switchServer(s){
+  current=s; store.set("wpc.server",s);
+  namesEl.value=getNames(s); $("out").hidden=true;
+  renderServers(); compute();
+}
+
+function compute(){
+  const map=fileRows[current];
+  results=parseNames(namesEl.value).map(n=>{
+    if(!map) return {username:n,state:"wait"};
+    const h=map.get(n.toLowerCase());
+    return h?{username:n,state:"ok",wallet:h.wallet,country:h.country,dup:h.dup}:{username:n,state:"miss"};
+  });
+  render();
+}
+
+function render(){
+  const loaded=!!fileRows[current], missVal=$("missVal").value;
+  const ok=results.filter(r=>r.state==="ok"), miss=results.filter(r=>r.state==="miss");
+  const total=ok.reduce((a,r)=>a+r.wallet,0);
+  const dash="—";
+  $("stats").innerHTML=`
+    <div class="stat"><div class="k">รายชื่อ</div><div class="v">${results.length}</div></div>
+    <div class="stat ok"><div class="k">พบในไฟล์</div><div class="v">${loaded?ok.length:dash}</div></div>
+    <div class="stat miss"><div class="k">ไม่พบ</div><div class="v">${loaded?miss.length:dash}</div></div>
+    <div class="stat total"><div class="k">รวม Wallet Point</div><div class="v">${loaded?fmt(total):dash}</div></div>`;
+  $("restitle").innerHTML=`ผลลัพธ์ ${current}<small>${loaded?esc(fileNames[current]):"รอไฟล์"}</small>`;
+  const fi=$("fileinfo");
+  if(!fi.classList.contains("err")){ fi.className="file "+(loaded?"":"none"); fi.textContent=loaded?"✓ "+fileNames[current]:"ยังไม่มีไฟล์ของ "+current; }
+  $("edtitle").textContent=`รายชื่อ Username ของ ${current} (${results.length})`;
+  $("tbody").innerHTML=results.length?results.map((r,i)=>{
+    const v=r.state==="ok"?fmt(r.wallet):r.state==="miss"?(missVal||dash):"…";
+    const tag=r.state==="ok"?`<span class="tag ok">พบ${r.dup>1?` · ซ้ำ ${r.dup}`:""}</span>`:r.state==="miss"?`<span class="tag miss">ไม่พบ</span>`:`<span class="tag wait">รอไฟล์</span>`;
+    return `<tr class="${r.state}"><td class="idx">${i+1}</td><td class="user">${esc(r.username)}</td><td class="num">${v}</td><td>${r.country?`<span class="cc">${esc(r.country)}</span>`:""}</td><td>${tag}</td></tr>`;
+  }).join(""):`<tr><td colspan="5" class="hint" style="padding:20px 16px">ยังไม่มีรายชื่อ เปิด "รายชื่อ Username" ด้านล่างเพื่อเพิ่ม</td></tr>`;
+  ["copyTable","copyNums","copyText"].forEach(id=>$(id).disabled=!loaded||!results.length);
+}
+
+const val=r=>r.state==="ok"?String(r.wallet):$("missVal").value;
+function copy(text,msg){
+  const o=$("out"); o.hidden=false; o.textContent=text;
+  const fallback=()=>{const rg=document.createRange();rg.selectNodeContents(o);const s=getSelection();s.removeAllRanges();s.addRange(rg);toast("เลือกข้อความให้แล้ว กด Ctrl+C เพื่อคัดลอก")};
+  try{navigator.clipboard.writeText(text).then(()=>toast(msg),fallback)}catch(e){fallback()}
+}
+$("copyTable").onclick=()=>copy("Username\tWallet Point\n"+results.map(r=>r.username+"\t"+val(r)).join("\n"),"คัดลอกตารางแล้ว วางใน Excel ได้เลย");
+$("copyNums").onclick=()=>copy(results.map(val).join("\n"),"คัดลอกตัวเลขแล้ว (เรียงตามรายชื่อ)");
+$("copyText").onclick=()=>copy(results.map(r=>r.username+" : "+(r.state==="ok"?fmt(r.wallet):val(r))).join("\n"),"คัดลอกข้อความแล้ว");
+$("missVal").onchange=render;
+
+let tt; function toast(m){const e=$("toast");e.textContent=m;e.classList.add("show");clearTimeout(tt);tt=setTimeout(()=>e.classList.remove("show"),1900)}
+
+namesEl.addEventListener("input",()=>{store.set("wpc.names."+current,namesEl.value);renderServers();compute()});
+$("resetNames").onclick=()=>{namesEl.value=SERVERS[current].names;store.set("wpc.names."+current,namesEl.value);renderServers();compute();toast("คืนค่ารายชื่อแล้ว")};
+
+// ---------- File reading ----------
+const norm=h=>String(h||"").toLowerCase().replace(/[^a-z]/g,"");
+function buildMap(rows){
+  let hi=-1,uc=-1,wc=-1,cc=-1;
+  for(let i=0;i<Math.min(rows.length,10);i++){
+    const r=rows[i].map(norm);
+    const u=r.findIndex(h=>h==="username"||h==="user"||h==="accountname"||h==="account");
+    const w=r.findIndex(h=>h.startsWith("walletpo"));
+    if(u>-1&&w>-1){hi=i;uc=u;wc=w;cc=r.findIndex(h=>h.startsWith("country"));break}
+  }
+  if(hi<0) throw new Error("ไม่เจอหัวคอลัมน์ username / Wallet Point");
+  const map=new Map();
+  for(let i=hi+1;i<rows.length;i++){
+    const r=rows[i],u=String(r[uc]??"").trim(); if(!u) continue;
+    const w=Number(String(r[wc]??"").replace(/,/g,""))||0, k=u.toLowerCase();
+    if(map.has(k)) map.get(k).dup++;
+    else map.set(k,{wallet:w,country:cc>-1?String(r[cc]??"").trim():"",dup:1});
+  }
+  return {map,count:rows.length-hi-1};
+}
+const detect=name=>ORDER.find(s=>SERVERS[s].match.test(name))||null;
+
+async function handleFiles(list){
+  const files=[...(list||[])]; if(!files.length) return;
+  const fi=$("fileinfo"); fi.classList.remove("err");
+  if(typeof XLSX==="undefined"){fi.className="file err";fi.textContent="โหลดตัวอ่านไฟล์ไม่สำเร็จ ตรวจอินเทอร์เน็ตแล้วรีเฟรชหน้า";return}
+  const done=[], errs=[], synced=[]; let last=null;
+  fi.className="file none"; fi.textContent="กำลังอ่านไฟล์…";
+  for(const f of files){
+    try{
+      const wb=XLSX.read(await f.arrayBuffer(),{type:"array"});
+      const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,raw:true,defval:""});
+      const {map,count}=buildMap(rows);
+      const s=detect(f.name)||(files.length===1?current:null);
+      if(!s){errs.push(f.name+": บอกเซิร์ฟจากชื่อไฟล์ไม่ได้");continue}
+      fileRows[s]=map; fileNames[s]=`${f.name} · ${count.toLocaleString()} แถว`; delete fileAt[s]; done.push(s); last=s;
+      try{ if(await pushCloud(s,f.name,map,count)) synced.push(s); }catch(e){ errs.push(s+": "+e.message); }
+    }catch(e){errs.push(f.name+": "+e.message)}
+  }
+  if(last && last!==current){current=last;store.set("wpc.server",last);namesEl.value=getNames(last)}
+  $("out").hidden=true;
+  renderServers(); compute();
+  if(errs.length){fi.className="file err";fi.textContent="อ่านไม่ได้ — "+errs.join(" | ")}
+  if(synced.length) toast("อัปเดตข้อมูลกลางแล้ว: "+synced.join(", ")+" · ทุกคนเห็นได้ "+KEEP_DAYS+" วัน");
+  else if(done.length) toast("อ่านไฟล์แล้ว: "+done.join(", "));
+}
+$("file").onchange=e=>{handleFiles(e.target.files);e.target.value=""};
+const drop=$("drop");
+["dragenter","dragover"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add("over")}));
+["dragleave","drop"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove("over")}));
+drop.addEventListener("drop",e=>{e.stopPropagation();handleFiles(e.dataTransfer.files)});
+document.addEventListener("dragover",e=>e.preventDefault());
+document.addEventListener("drop",e=>{e.preventDefault();handleFiles(e.dataTransfer.files)});
+
+namesEl.value=getNames(current);
+renderServers(); compute(); loadCloud();
+</script>
+
+</body>
+</html>
