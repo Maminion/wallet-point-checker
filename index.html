@@ -100,12 +100,13 @@ th{font-size:.72rem;letter-spacing:.07em;text-transform:uppercase;color:var(--mu
 tbody tr+tr td{border-top:1px solid var(--line)}
 tbody tr:hover td{background:var(--sunken)}
 td.idx{color:var(--muted);width:44px;font-size:.85rem}
+td.nick{font:600 .95rem var(--font-display)}
 td.user{font:500 .95rem var(--font-mono)}
 td.num,th.num{text-align:right}
 td.num{font:700 1.02rem var(--font-mono);color:var(--gold)}
 tr.miss td.num{color:var(--miss);font-weight:500;font-size:.9rem;font-family:var(--font-body)}
 tr.wait td.num{color:var(--muted);font-weight:400}
-tr.miss td.user{color:var(--muted)}
+tr.miss td.user,tr.miss td.nick{color:var(--muted)}
 .cc{font:600 .75rem var(--font-mono);padding:2px 7px;border-radius:6px;background:var(--sunken);border:1px solid var(--line);color:var(--muted)}
 .tag{font-size:.78rem;padding:2px 10px;border-radius:999px;display:inline-flex;align-items:center;gap:6px}
 .tag::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
@@ -167,7 +168,7 @@ textarea{width:100%;min-height:220px;resize:vertical;font:.9rem/1.65 var(--font-
     </div>
     <div class="tablebox">
       <table>
-        <thead><tr><th>#</th><th>Username</th><th class="num">Wallet Point</th><th>Country</th><th>สถานะ</th></tr></thead>
+        <thead><tr><th>#</th><th>ชื่อเล่น</th><th>Username</th><th class="num">Wallet Point</th><th>Country</th><th>สถานะ</th></tr></thead>
         <tbody id="tbody"></tbody>
       </table>
     </div>
@@ -178,7 +179,7 @@ textarea{width:100%;min-height:220px;resize:vertical;font:.9rem/1.65 var(--font-
     <summary id="edtitle">รายชื่อ Username</summary>
     <div class="ed">
       <textarea id="names" spellcheck="false" aria-label="รายชื่อ Username"></textarea>
-      <p class="hint">หนึ่งชื่อต่อบรรทัด ไม่สนตัวพิมพ์เล็ก/ใหญ่ ที่แก้ตรงนี้จะจำไว้ในเบราว์เซอร์นี้แยกตามเซิร์ฟเวอร์</p>
+      <p class="hint">หนึ่งชื่อต่อบรรทัด ใส่ชื่อเล่นไว้หน้า Username ได้ เช่น "Bryan itzmeyanyan" · ไม่สนตัวพิมพ์เล็ก/ใหญ่ ที่แก้ตรงนี้จะจำไว้ในเบราว์เซอร์นี้แยกตามเซิร์ฟเวอร์</p>
       <div><button class="btn ghost" id="resetNames">คืนค่ารายชื่อเริ่มต้น</button></div>
     </div>
   </details>
@@ -187,15 +188,15 @@ textarea{width:100%;min-height:220px;resize:vertical;font:.9rem/1.65 var(--font-
 
 <script>
 const SERVERS = {
-  "CBPC-SEA": {plat:"PC", region:"SEA", match:/pc[\s_-]*sea/i, names:`itzmeyanyan
-eyahlester
-advance12
-oninski21
-Socc3r4
-ichaichs
-seatestcabal
-fattykrappy
-cruzer23
+  "CBPC-SEA": {plat:"PC", region:"SEA", match:/pc[\s_-]*sea/i, names:`Bryan itzmeyanyan
+Eyah eyahlester
+Lester advance12
+Onin oninski21
+Harith Socc3r4
+Icha ichaichs
+Rizal seatestcabal
+Sasa fattykrappy
+Adams cruzer23
 trinitysoults`},
   "CBPC-TH": {plat:"PC", region:"TH", match:/pc[\s_-]*th/i, names:`phongpitchz
 nawapk1806
@@ -236,7 +237,7 @@ const store = {
   get(k){try{return localStorage.getItem(k)}catch(e){return null}},
   set(k,v){try{localStorage.setItem(k,v)}catch(e){}}
 };
-const LIST_VER = "7";
+const LIST_VER = "8";
 try{ if(localStorage.getItem("wpc.listver")!==LIST_VER){ ORDER.forEach(s=>localStorage.removeItem("wpc.names."+s)); localStorage.setItem("wpc.listver",LIST_VER); } }catch(e){}
 
 let current = store.get("wpc.server") || "CBPC-SEA";
@@ -282,7 +283,9 @@ let results = [];
 const $ = id => document.getElementById(id);
 const namesEl = $("names");
 const getNames = s => { const v = store.get("wpc.names."+s); return v!==null ? v : SERVERS[s].names; };
-const parseNames = t => t.split(/[\r\n,]+/).map(s=>s.trim()).filter(Boolean);
+// each line: "username" or "Nickname username" (nickname first, username = last word)
+const parseEntries = t => t.split(/[\r\n,]+/).map(s=>s.trim()).filter(Boolean).map(l=>{const p=l.split(/\s+/);const username=p.pop();return {username,nick:p.join(" ")}});
+const parseNames = t => parseEntries(t).map(e=>e.username);
 const fmt = n => Number(n).toLocaleString("en-US");
 const esc = s => String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 
@@ -305,10 +308,10 @@ function switchServer(s){
 
 function compute(){
   const map=fileRows[current];
-  results=parseNames(namesEl.value).map(n=>{
-    if(!map) return {username:n,state:"wait"};
+  results=parseEntries(namesEl.value).map(({username:n,nick})=>{
+    if(!map) return {username:n,nick,state:"wait"};
     const h=map.get(n.toLowerCase());
-    return h?{username:n,state:"ok",wallet:h.wallet,country:h.country,dup:h.dup}:{username:n,state:"miss"};
+    return h?{username:n,nick,state:"ok",wallet:h.wallet,country:h.country,dup:h.dup}:{username:n,nick,state:"miss"};
   });
   render();
 }
@@ -330,8 +333,8 @@ function render(){
   $("tbody").innerHTML=results.length?results.map((r,i)=>{
     const v=r.state==="ok"?fmt(r.wallet):r.state==="miss"?(missVal||dash):"…";
     const tag=r.state==="ok"?`<span class="tag ok">พบ${r.dup>1?` · ซ้ำ ${r.dup}`:""}</span>`:r.state==="miss"?`<span class="tag miss">ไม่พบ</span>`:`<span class="tag wait">รอไฟล์</span>`;
-    return `<tr class="${r.state}"><td class="idx">${i+1}</td><td class="user">${esc(r.username)}</td><td class="num">${v}</td><td>${r.country?`<span class="cc">${esc(r.country)}</span>`:""}</td><td>${tag}</td></tr>`;
-  }).join(""):`<tr><td colspan="5" class="hint" style="padding:20px 16px">ยังไม่มีรายชื่อ เปิด "รายชื่อ Username" ด้านล่างเพื่อเพิ่ม</td></tr>`;
+    return `<tr class="${r.state}"><td class="idx">${i+1}</td><td class="nick">${r.nick?esc(r.nick):'<span class="hint">—</span>'}</td><td class="user">${esc(r.username)}</td><td class="num">${v}</td><td>${r.country?`<span class="cc">${esc(r.country)}</span>`:""}</td><td>${tag}</td></tr>`;
+  }).join(""):`<tr><td colspan="6" class="hint" style="padding:20px 16px">ยังไม่มีรายชื่อ เปิด "รายชื่อ Username" ด้านล่างเพื่อเพิ่ม</td></tr>`;
   ["copyTable","copyNums","copyText"].forEach(id=>$(id).disabled=!loaded||!results.length);
 }
 
@@ -341,9 +344,9 @@ function copy(text,msg){
   const fallback=()=>{const rg=document.createRange();rg.selectNodeContents(o);const s=getSelection();s.removeAllRanges();s.addRange(rg);toast("เลือกข้อความให้แล้ว กด Ctrl+C เพื่อคัดลอก")};
   try{navigator.clipboard.writeText(text).then(()=>toast(msg),fallback)}catch(e){fallback()}
 }
-$("copyTable").onclick=()=>copy("Username\tWallet Point\n"+results.map(r=>r.username+"\t"+val(r)).join("\n"),"คัดลอกตารางแล้ว วางใน Excel ได้เลย");
+$("copyTable").onclick=()=>copy("ชื่อเล่น\tUsername\tWallet Point\n"+results.map(r=>(r.nick||"")+"\t"+r.username+"\t"+val(r)).join("\n"),"คัดลอกตารางแล้ว วางใน Excel ได้เลย");
 $("copyNums").onclick=()=>copy(results.map(val).join("\n"),"คัดลอกตัวเลขแล้ว (เรียงตามรายชื่อ)");
-$("copyText").onclick=()=>copy(results.map(r=>r.username+" : "+(r.state==="ok"?fmt(r.wallet):val(r))).join("\n"),"คัดลอกข้อความแล้ว");
+$("copyText").onclick=()=>copy(results.map(r=>(r.nick?r.nick+" ("+r.username+")":r.username)+" : "+(r.state==="ok"?fmt(r.wallet):val(r))).join("\n"),"คัดลอกข้อความแล้ว");
 $("missVal").onchange=render;
 
 let tt; function toast(m){const e=$("toast");e.textContent=m;e.classList.add("show");clearTimeout(tt);tt=setTimeout(()=>e.classList.remove("show"),1900)}
